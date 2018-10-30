@@ -12,15 +12,11 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javafx.util.Pair;
@@ -51,6 +47,12 @@ public class SVOStats {
             System.exit(0);
         }
         
+        if(args[0].equals("-h"))
+        {
+            System.out.println("This tool returns the counts of all the Subjects, Verbs, and Objects that appear in SVOS");
+            System.exit(0);
+        }
+        
         String inFile = args[0];
         inFile = FilenameUtils.normalize(inFile);
         if(inFile == null)
@@ -76,7 +78,6 @@ public class SVOStats {
         HashMap<BWord, Integer> subjectCounts   = new HashMap<>();
         HashMap<BWord, Integer> verbCounts      = new HashMap<>();
         HashMap<BWord, Integer> objectCounts    = new HashMap<>();
-        HashMap<SVO, ArrayList<SVO>> svoGroups = new HashMap<>();
         
         svos.forEach(svo -> {
             //subjects
@@ -99,18 +100,7 @@ public class SVOStats {
                 objectCounts.put(svo.getObject(), 1);
             else
                 objectCounts.replace(svo.getObject(), count+1);
-            
-            ArrayList<SVO> group = svoGroups.get(svo);
-            if(group == null)
-                svoGroups.put(svo, new ArrayList<>(Arrays.asList(svo)));
-            else
-                group.add(svo);
         });
-        
-        //compress groups to a single sentiment value
-        //each entry is of the form Pair<Representative SVO, <some data, maybe just a count, maybe a sentiment>>
-        ArrayList<Pair<SVO, Pair<Double, Integer>>> svoSents = new ArrayList<>();
-        svoGroups.entrySet().forEach(group -> svoSents.add(new Pair(group.getKey(), compressGroup(group.getValue())))); //to change the compression scheme, change the function (defined below
         
         
         System.out.println("Sorting Subjects");
@@ -135,48 +125,7 @@ public class SVOStats {
         System.out.println("Writing sorted objects");
         storeCountList(objectFreqs,"objects", pathNoExtension + "-ObjectFreqs.csv");
 
-        //writing a compressed SVO file //Note this should probably be two programs
-        System.out.println("Writing sentiment for svo groups");
-        CSVPrinter printer = new CSVPrinter(new BufferedWriter(new FileWriter(pathNoExtension + "-SVOsGroupedWithSentiment.csv")),
-                                    CSVFormat.DEFAULT.withHeader(   "subject",
-                                                                    "subjectNegated",
-                                                                    "verb",
-                                                                    "verbNegated",
-                                                                    "object",
-                                                                    "objectNegated",
-                                                                    "sentiment",
-                                                                    "count"));
-        svoSents.forEach(tuple -> {
-            try {
-                SVO svo = tuple.getKey();
-                BWord subject = svo.getSubject();
-                BWord verb = svo.getVerb();
-                BWord object = svo.getObject();
-                printer.printRecord(subject.word,
-                                    subject.negated,
-                                    verb.word,
-                                    verb.negated,
-                                    object.word,
-                                    object.negated,
-                                    tuple.getValue().getKey(),      //sentiment for this group
-                                    tuple.getValue().getValue());   //count of this group
-            } catch (IOException ex) {
-                Logger.getLogger(SVOStats.class.getName()).log(Level.SEVERE, null, ex);
-            }
-        });
-        printer.close();
         System.out.println("Done");
-    }
-    
-    public static Pair<Double, Integer> compressGroup(ArrayList<SVO> group)
-    {
-        //FILL THIS WITH THE REQUIRED SENTIMENT AND WEIGHTING
-        double sum = 0;
-        for(SVO svo : group)
-        {
-            sum += svo.getSentiment();
-        }
-        return new Pair<Double,Integer>(sum/group.size(), group.size());
     }
     
     public static ArrayList<Entry<BWord, Integer>> mapToSortedList(HashMap<BWord, Integer> wordCounts)
